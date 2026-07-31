@@ -1,0 +1,4 @@
+Reason For the Pattern.
+
+in the main class instead of calling the constructor directly, we can have the factory that can create
+the different type of shape objects.

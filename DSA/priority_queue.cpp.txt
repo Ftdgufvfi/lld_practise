@@ -1,0 +1,272 @@
+/*
+Let's try to understand Priority queue.
+
+Max heap => root is the max element;
+min heap => root is the min element;
+*/
+
+/*
+usage
+
+priority_queue<int>pq;    --> default is Max_heap
+
+priority_queue<int, vector<int>>pq  ---> defining your own underlying container
+
+priority_queue<int, vector<int>, greater<int>>pq --> minHeap
+
+class Compare{
+
+    public:
+
+    bool operator() (const pair<int, int>& a, const pair<int, int>& b)
+    {
+        if(a.first+a.second == b.first+b.second)
+        {
+            return a.first<b.first;
+        }
+        else
+        {
+            return (a.first+a.second < b.first+b.second);
+        }
+    }
+
+};
+
+priority_queue<pair<int, int>, vector<pair<int, int>>, Compare>pq;
+*/
+
+/*
+Time complexity
+
+pq.push(); --> O(log n)
+pq.top(); ---> O(1)
+pq.empty(); ---> O(1)
+pq.size(); -----> O(1)
+pq.pop(); -----> O(log n)
+
+Amortized Time Complexities:
+
+For updation or insertion, If binary heap the amortized Time complexity is O(log n);
+
+Where as If it is fibonacci heap Then time Complexity is O(1);
+
+The fibonacci also have decrease key which has amortized complexity of O(1);
+
+It also has merge which can merge two fibonacci heaps in o(1)
+
+Operation	  Binary Heap	Binomial Heap	Fibonacci Heap
+insert	        O(log N)	    O(log N)	    O(1)
+find-min	      O(1)	        O(log N)	    O(1)
+delete	         O(log N)	    O(log N)	    O(log N)
+decrease-key	 O(log N)	    O(log N)	    O(1)
+union	           O(N)	        O(log N)	    O(1)
+*/
+
+/*
+ok lets understand about binary heap, binomial heap, fibonacci heap.
+
+In C++ STL, the built‑in std::priority_queue is implemented using a binary heap (specifically a max‑heap by default).
+
+Binomial Heap Insertion (5-line summary)
+
+Create a new B₀ tree containing only the element to be inserted.
+Merge this tree with the existing binomial heap.
+If two trees have the same degree, link them by making the larger root a child of the smaller root.
+Continue linking equal-degree trees until no duplicates remain.
+This process is exactly like binary addition with carries, giving O(log n) insertion time.
+
+Fibonacci Heap (5-line concise explanation)
+
+A Fibonacci Heap is a collection of min-heap trees where trees are not immediately merged after insertion.
+Insert simply adds a new tree to the root list, so insertion takes O(1) amortized time.
+The minimum pointer always points to the smallest root, so finding the minimum is O(1).
+Trees are merged only during Extract-Min, making inserts and decrease-key operations very fast.
+It is mainly used in algorithms like Dijkstra's and Prim's, where many decrease-key operations occur.
+*/
+
+/*
+Array Implementation of PQ:
+*/
+
+#include <iostream>
+#include <stdexcept>
+#include <vector>
+
+using namespace std;
+
+class CustomPriorityQueue {
+private:
+    vector<int> heap;
+
+    void heapifyUp(int index) {
+        while (index > 0) {
+            int parent = (index - 1) / 2;
+            if (heap[parent] <= heap[index]) {
+                break;
+            }
+            swap(heap[parent], heap[index]);
+            index = parent;
+        }
+    }
+
+    void heapifyDown(int index) {
+        int n = static_cast<int>(heap.size());
+        while (true) {
+            int left = 2 * index + 1;
+            int right = 2 * index + 2;
+            int smallest = index;
+
+            if (left < n && heap[left] < heap[smallest]) {
+                smallest = left;
+            }
+            if (right < n && heap[right] < heap[smallest]) {
+                smallest = right;
+            }
+
+            if (smallest == index) {
+                break;
+            }
+
+            swap(heap[index], heap[smallest]);
+            index = smallest;
+        }
+    }
+
+public:
+    void push(int val) {
+        heap.push_back(val);
+        heapifyUp(static_cast<int>(heap.size()) - 1);
+    }
+
+    void pop() {
+        if (empty()) {
+            throw out_of_range("Priority queue is empty");
+        }
+
+        heap[0] = heap.back();
+        heap.pop_back();
+
+        if (!empty()) {
+            heapifyDown(0);
+        }
+    }
+
+    int top() const {
+        if (empty()) {
+            throw out_of_range("Priority queue is empty");
+        }
+        return heap[0];
+    }
+
+    bool empty() const {
+        return heap.empty();
+    }
+
+    int size() const {
+        return static_cast<int>(heap.size());
+    }
+};
+
+template <typename T, typename Compare = less<T>>
+class CustomPriorityQueueTemplate {
+private:
+    vector<T> heap;
+    Compare comp;
+
+    void heapifyUp(int i) {
+        if (i == 0) return;
+        int parent = (i - 1) / 2;
+        if (comp(heap[i], heap[parent])) {  // child has higher priority than parent
+            swap(heap[parent], heap[i]);
+            heapifyUp(parent);
+        }
+    }
+
+    void heapifyDown(int i) {
+        int n = static_cast<int>(heap.size());
+        while (true) {
+            int left = 2 * i + 1;
+            int right = 2 * i + 2;
+            int best = i;
+
+            if (left < n && comp(heap[left], heap[best])) {
+                best = left;
+            }
+            if (right < n && comp(heap[right], heap[best])) {
+                best = right;
+            }
+
+            if (best == i) {
+                break;
+            }
+
+            swap(heap[i], heap[best]);
+            i = best;
+        }
+    }
+
+public:
+    int size() const {
+        return static_cast<int>(heap.size());
+    }
+
+    bool empty() const {
+        return heap.empty();
+    }
+
+    void push(const T& value) {
+        heap.push_back(value);
+        heapifyUp(static_cast<int>(heap.size()) - 1);
+    }
+
+    T pop() {
+        if (empty()) {
+            throw out_of_range("Priority queue is empty");
+        }
+
+        T min_value = heap[0];
+        heap[0] = heap.back();
+        heap.pop_back();
+
+        if (!empty()) {
+            heapifyDown(0);
+        }
+
+        return min_value;
+    }
+
+    const T& top() const {
+        if (empty()) {
+            throw out_of_range("Priority queue is empty");
+        }
+        return heap[0];
+    }
+};
+
+int main() {
+    CustomPriorityQueue pq;
+
+    pq.push(10);
+    pq.push(4);
+    pq.push(7);
+    pq.push(1);
+
+    while (!pq.empty()) {
+        cout << pq.top() << " ";
+        pq.pop();
+    }
+
+    CustomPriorityQueueTemplate<int> pq1;
+    pq1.push(10);
+    pq1.push(4);
+    pq1.push(7);
+
+    while(!pq1.empty())
+    {
+        cout << pq1.top() <<" ";
+        pq1.pop();
+    }
+
+    return 0;
+}
+

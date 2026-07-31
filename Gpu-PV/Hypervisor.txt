@@ -1,0 +1,148 @@
+Lets Understand about the hypervisor.
+
+ using software to create a fake ("virtual") version of a physical resource, 
+ so one physical machine can pretend to be many.
+
+ Type 1 — "bare metal": runs directly on hardware; the OSes run on top of it.
+ • Examples: Hyper-V, VMware ESXi, Xen, KVM (Linux is the hypervisor).
+
+ Type 2 — "hosted": runs as an app inside a normal OS.
+• Examples: VirtualBox, VMware Workstation, QEMU (user mode).
+
+
+   TYPE 1 (Hyper-V)                TYPE 2 (VirtualBox)
+ ┌────────┬────────┐             ┌────────┬────────┐
+ │ Parent │ Guest  │             │  Guest │ Guest  │
+ │ (Win)  │  VM    │             │   VM   │  VM    │
+ ├────────┴────────┤             ├────────┴────────┤
+ │   Hypervisor    │             │   VBox (app)    │
+ ├─────────────────┤             ├─────────────────┤
+ │    Hardware     │             │    Host OS      │
+ └─────────────────┘             ├─────────────────┤
+                                 │    Hardware     │
+                                 └─────────────────┘
+
+it's a Type 1 hypervisor, but with a twist. There's a special root/parent partition (the "host" Windows)
+that owns the real device drivers, plus child partitions (guest VMs). 
+The thin hypervisor handles CPU/memory; the parent partition handles most I/O on behalf of guests. 
+That parent partition running the real GPU driver is exactly the "host" in our GPU-P
+
+Aside: containers — Docker — are not virtualization in this sense. 
+They share one kernel and isolate via namespaces/cgroups. Lighter, but weaker isolation. 
+VMs virtualize hardware; containers virtualize the OS.
+
+┌────────────────────┬──────────────────────────────────────────────────────────┬──────────────────────┬─────────┐
+│ Technique          │ How                                                      │ Guest aware?         │ Speed   │
+├────────────────────┼──────────────────────────────────────────────────────────┼──────────────────────┼─────────┤
+│ Full               │ Emulate/trap-and-emulate real hardware                   │ No (thinks it's      │ Slower  │
+│ virtualization     │                                                          │ real)                │         │
+├────────────────────┼──────────────────────────────────────────────────────────┼──────────────────────┼─────────┤
+│ Paravirtualization │ Guest uses special hypervisor-aware drivers/APIs         │ Yes, cooperates      │ Fast    │
+├────────────────────┼──────────────────────────────────────────────────────────┼──────────────────────┼─────────┤
+│ Hardware-assisted  │ CPU/chipset features do it in silicon (VT-x, EPT, IOMMU) │ No                   │ Fastest │
+└────────────────────┴──────────────────────────────────────────────────────────┴──────────────────────┴─────────┘
+
+CPU — time-slicing + hardware assist
+
+• The hypervisor scheduler time-slices physical cores among virtual CPUs (like an OS schedules threads).
+• VT-x lets guest code run natively. Only privileged/sensitive events cause a "VM exit" that traps into the hypervisor (rare). 
+This is why VMs are near-native speed.
+
+Memory — two-level page tables
+
+• Guest thinks it has physical RAM from 0. Reality: another translation layer.
+• EPT (Intel) / NPT (AMD) = hardware second-level page tables: Guest-Virtual → Guest-Physical → Host-Physical, enforced by the MMU on every access.
+• This is the hardware isolation guarantee: a guest literally cannot form an address that reaches host or another guest's RAM — the silicon blocks it.
+• Extras: overcommit (hand out more than you have), ballooning (reclaim idle guest RAM).
+
+Hypervisor creates and owns the EPT tables.
+CPU/MMU uses those EPT tables during every memory access.
+
+in normal OS, there is some register cr3 which contains the physical address of the top level of the page
+table, (PML4)
+
+The MMU looks into this address and when accessing the memory, it uses that translation.
+TLB also used as cache for this translation.
+
+in the normal os, during pagefault,
+VA not mapped -> Page Fault -> Windows Memory Manager6 -> Update page tables -> Resume thread
+
+Process A cannot access Process B's memory because the MMU uses different page tables, and the Windows
+Memory Manager enforces process isolation.
+
+I/O (disk, network, GPU) — the spectrum
+
+This is where it gets interesting, and it mirrors the GPU story:
+
+┌─────────────┬──────────────────────────────────────────────────────────────┬──────────────────┬────────────────┐
+│ Model       │ How                                                          │ Isolation        │ Speed          │
+├─────────────┼──────────────────────────────────────────────────────────────┼──────────────────┼────────────────┤
+│ Emulation   │ Hypervisor fakes a real device (e.g. an old NIC)             │ Strong           │ Slow           │
+├─────────────┼──────────────────────────────────────────────────────────────┼──────────────────┼────────────────┤
+│ Paravirtual │ Guest runs a hypervisor-aware driver over a fast channel     │ Strong (software │ Fast           │
+│             │ (VMBus in Hyper-V, virtio in KVM)                            │ boundary)        │                │
+├─────────────┼──────────────────────────────────────────────────────────────┼──────────────────┼────────────────┤
+│ Passthrough │ Give the whole physical device to one VM via IOMMU           │ Strong (HW)      │ Native, but    │
+│ (DDA)       │                                                              │                  │ not shared     │
+├─────────────┼──────────────────────────────────────────────────────────────┼──────────────────┼────────────────┤
+│ SR-IOV      │ Device exposes many hardware "Virtual Functions," one per VM │ HW-enforced      │ Native +       │
+│             │                                                              │                  │ shared         │
+└─────────────┴──────────────────────────────────────────────────────────────┴──────────────────┴────────────────┘
+
+Two things enable the bottom two:
+
+• IOMMU (VT-d): hardware that confines a device's DMA to the owning VM's memory — so a passed-through device can't DMA into the host.
+• VMBus: Hyper-V's fast in-memory channel for paravirtual I/O between guest and parent partition. This is the pipe GPU-P uses.
+
+1. Each VM gets a virtual NIC (vNIC), MAC address, IP address, and one or more virtual CPUs (vCPUs).
+
+2. The hypervisor schedules vCPUs onto physical CPU cores, similar to how an OS schedules threads.
+
+3. Memory isolation is enforced using EPT/NPT mappings, where the CPU/MMU translates Guest Virtual → Guest Physical → Host Physical addresses.
+
+4. The hypervisor creates and maintains EPT tables, while the CPU/MMU performs the actual address translation.
+
+5. Normal memory accesses do not cause VM exits; VM exits occur only for special events such as EPT violations, interrupts, or privileged operations.
+
+6. For networking, the guest OS uses a vNIC and places packets into shared VMBus/VirtIO ring buffers.
+
+7. A virtual switch acts like a software Ethernet switch and forwards frames between vNICs, the host, and the physical NIC.
+
+8. The virtual switch maintains a MAC table that maps each VM's MAC address to a virtual switch port.
+
+9. NAT uses IP addresses and TCP/UDP ports to translate private VM addresses to host/public addresses; it does not use virtual switch ports.
+
+10. When a response arrives, NAT identifies the destination VM, the virtual switch delivers the packet to the correct vNIC using MAC lookup, and the guest TCP/IP stack delivers it to the correct process using the TCP/UDP port.
+
+Additional Hyper-V details
+
+Global bit and Process-Context Identifiers (PCIDs)
+
+• Each process normally has its own page-table root in CR3. A PCID stored with CR3 tags TLB entries with the address-space identity, allowing translations for multiple processes to remain cached across context switches.
+• The Global (G) bit is a page-table-entry flag, not a single system-wide bit. It marks mappings such as shared kernel mappings that do not need to be flushed during an ordinary CR3 switch when global pages are enabled.
+• PCIDs distinguish address spaces; the Global bit identifies selected translations that can be retained across address-space switches. They reduce TLB flushes but do not replace page tables or EPT isolation.
+• Under virtualization, the processor must account for both the guest address space and the VM's second-level translation context (EPT/NPT). Hardware tags cached translations so entries from different processes or VMs are not confused.
+
+Virtual switch
+
+• The Hyper-V virtual switch is implemented in the root/parent partition's Windows networking stack, not in the thin hypervisor itself.
+• It connects VM virtual NICs to one another, the management OS, and optionally a physical NIC. It can also apply policies such as VLANs, ACLs, filtering, and port security.
+
+Emulated and synthetic I/O
+
+• Emulated I/O presents a legacy hardware device to an unaware guest. Guest register or port accesses trap and are handled by an emulator in the parent partition; this path does not use the normal high-performance VMBus synthetic-device protocol.
+• Synthetic/paravirtual I/O uses a guest-aware Virtualization Service Client (VSC) driver and VMBus. It avoids repeatedly emulating legacy device operations and is normally much faster.
+• Some emulated-device control and interrupt plumbing can still involve Hyper-V partition mechanisms, but emulated I/O and VMBus synthetic I/O are distinct architectures.
+
+VSP, VSC, and VMBus
+
+• The Virtualization Service Client (VSC) runs in the guest and represents a synthetic device, such as a network or storage adapter.
+• The Virtualization Service Provider (VSP) runs in the parent partition and services the guest's requests using the host's real device stack.
+• VSC and VSP communicate through VMBus channels using shared-memory ring buffers and signaling. VMBus is the transport; the VSC and VSP are the endpoints implementing the device protocol.
+
+CPU execution and hypervisor responsibilities
+
+• Ordinary guest CPU instructions execute directly on the physical processor in a hardware virtualization mode. They are not interpreted by the host OS or hypervisor one instruction at a time.
+• Sensitive operations, configured events, interrupts, and violations cause a VM exit so the hypervisor can handle them. Therefore, not every instruction goes straight through without hypervisor control.
+• The hypervisor schedules virtual processors onto logical processors, manages partition boundaries and interrupt delivery, establishes second-level memory mappings such as EPT/NPT, and enforces isolation between partitions.
+• The parent partition handles most device management and I/O services. The hypervisor remains deliberately small and focuses mainly on CPU virtualization, memory virtualization, interrupt routing, and isolation.

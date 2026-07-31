@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Factory Pattern Java",
+			"type": "shell",
+			"command": "$javaHome = Join-Path $PWD '.jdk\\jdk-21.0.11+10'; & \"$javaHome\\bin\\javac.exe\" .\\Factory_Design_Pattern.java; & \"$javaHome\\bin\\java.exe\" -cp . Factory_Design_Pattern",
+			"group": "build"
+		}
+	]
+}
