@@ -4,3 +4,12 @@
 
 # Local toolchains
 .jdk/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Python virtual environments
+.venv/
+env/
+venv/

@@ -1,0 +1,112 @@
+// Rest is nothing but representational state Transfer. --> organizes APIs around resources
+
+Resources are nouns, not verbs. Use /orders, not /getOrders or /createOrder.
+HTTP methods define the action: GET (read), POST (create), PUT (full replace), PATCH (partial update), DELETE (remove).
+Use plural nouns for collection endpoints: /users, /orders.
+Nest resources to express relationships: /users/123/orders (orders belonging to user 123).
+Limit nesting to two levels — deeper nesting creates brittle URLs.
+Use HTTP status codes correctly: 200 (success), 201 (created), 204 (no content — successful delete),
+400 (bad request — client error), 401 (unauthorized), 403 (forbidden), 404 (not found), 409 (conflict),
+422 (unprocessable entity — validation error), 429 (rate limited), 500 (server error).
+Return consistent response shapes: always wrap responses in a predictable structure with data, error, and pagination fields.
+
+// API versioning Strategies
+
+Breaking changes are inevitable. Versioning strategies:
+(1) URL path versioning: /v1/users, /v2/users. (pro's: easy to use, clients must update url's, easy to depricate)
+(2) Header Versioning:  clean URLs. Cons: harder to test in browsers, easy to forget.
+(3) Query parameter: /users?version=2. Rarely used in production.
+
+Version APIs from the start (for example, /v1) and avoid breaking existing clients within the same version by making only backward-compatible changes.
+
+If breaking changes are needed, release a new version (for example, /v2), provide a migration guide, and give customers advance notice with deprecation
+and sunset dates before retiring the old version.
+
+// API Gateway
+An API Gateway is a server that acts as the single entry point for all client requests to backend services.
+Instead of clients calling multiple microservices directly, they send requests to the API Gateway, which routes them to the appropriate service.
+
+// pagination Patterns
+
+Avoid larger responses so, use pagination techniques to reduce the response sizes.
+
+Offset-based pagination -> the client sends limit (records to return) and offset (records to skip).
+Example: GET /users?limit=10&offset=20
+
+SELECT *
+FROM users
+ORDER BY id
+LIMIT 10 OFFSET 20;
+
+For page-based input: offset = (page - 1) * limit.
+It is easy to implement, but large offsets are slow because the database must scan and discard the skipped rows.
+Inserts or deletes between requests can also cause duplicate or missing results.
+
+Page-based pagination -> the client sends a page number and page size.
+Example: GET /orders?page=3&per_page=10
+
+This provides a simpler client API, but the server converts the page into an offset. It therefore has the same O(N) database cost as offset pagination, where N is the number of skipped rows.
+
+The server converts the page number into an offset:
+offset = (page - 1) * per_page = (3 - 1) * 10 = 20
+
+SELECT *
+FROM users
+ORDER BY id
+LIMIT 10 OFFSET 20;
+
+It is intuitive for UIs because users can jump to a specific page and see the total number of pages.
+However, it uses offset pagination internally, so large page numbers are slower and concurrent inserts or deletes can cause duplicate or missing results.
+
+Page-based SQL optimization:
+
+Ensure the ORDER BY column is indexed (a primary-key id is normally already indexed):
+
+CREATE INDEX idx_users_id ON users(id);
+
+For a deep page, first paginate over the narrow id index and then fetch only those complete rows:
+
+SELECT u.id, u.name, u.email
+FROM users AS u
+JOIN (
+	SELECT id
+	FROM users
+	ORDER BY id
+	LIMIT 10 OFFSET 100000
+) AS requested_page ON requested_page.id = u.id
+ORDER BY u.id;
+
+This keeps page-based navigation and reduces the amount of full-row data scanned. The database must still skip the earlier index entries, so extremely deep pages remain slower.
+
+Cursor-based pagination -> prefer this for endpoints that may return large or frequently changing result sets.
+
+First request:
+GET /orders?limit=10
+
+Response:
+{
+	"data": [...],
+	"next_cursor": "100000"
+}
+
+The client passes next_cursor as the after parameter for the next page:
+GET /orders?limit=10&after=100000
+
+SELECT *
+FROM orders
+WHERE id > 100000
+ORDER BY id
+LIMIT 10;
+
+The server returns a new next_cursor with each page. The client does not calculate offsets or page numbers.
+
+// Idempotency
+
+Idempotency means multiple retries with the same payload shouldn't alter the output or response
+Lets say the payment process may be because of network failures leads to multiple tries then it should
+not cause multiple fee deductions.
+
+The one way of introducing idempotency is the clients post request produce one hash and it is sent through the
+header, the server caches the key into redis/postgres when the client retries then uses the same hash key.
+it checks if it is still in progress then it will return status code (409) means conflict.
+only post and patch needs explict idempotency handling.
