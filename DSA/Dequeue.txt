@@ -1,0 +1,4 @@
+vector<int>tree
+tree.resize(n, 0);
+
+distance(st.begin(), it) will take o(n) time.

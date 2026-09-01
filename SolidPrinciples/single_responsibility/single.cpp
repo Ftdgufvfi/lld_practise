@@ -2,6 +2,8 @@
 using namespace std;
 
 // here baker class is doing two things, baking and checking inventory. This violates the single responsibility principle. We can refactor this code by creating two separate classes, one for baking and another for inventory management. 
+
+// improves maintainability and readability
 class baker {
     public:
     void bake(){

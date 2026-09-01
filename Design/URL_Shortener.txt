@@ -1,0 +1,177 @@
+URL SHORTENER - DESIGN AND IMPLEMENTATION
+==========================================
+
+1. WHAT A URL SHORTENER DOES
+----------------------------
+A URL shortener stores a mapping:
+
+    short code -> original URL
+    aZ91x      -> https://example.com/a/very/long/path
+
+Creating a short URL is a write operation. Resolving it is a read operation that
+returns an HTTP redirect. Real systems are read-heavy because one URL may be
+created once and opened millions of times.
+
+
+2. API CONTRACT
+---------------
+Create:
+    POST /urls
+    {"url": "https://example.com/article"}
+
+    201 Created
+    {
+        "short_code": "1",
+        "short_url": "http://localhost:8008/1",
+        "original_url": "https://example.com/article",
+        "clicks": 0
+    }
+
+Optional custom alias:
+    POST /urls
+    {"url": "https://example.com/article", "custom_alias": "article"}
+
+Resolve:
+    GET /1 -> 307 Temporary Redirect
+    Location: https://example.com/article
+
+Metadata:
+    GET /urls/1
+
+Why 307? It preserves the original HTTP method. Many public shorteners use 301
+or 302 instead. A 301 is cacheable and reduces server traffic, but makes link
+changes and click tracking harder. A 302/307 keeps resolution under our control.
+
+
+3. CODE GENERATION: BASE62
+--------------------------
+The implementation gives each URL an integer ID and converts it to Base62.
+The alphabet contains 0-9, a-z, and A-Z, so every character carries one of 62
+values. Six characters provide 62^6 = 56,800,235,584 possible codes.
+
+Example conversion:
+    125 / 62 = 2 remainder 1
+    2   / 62 = 0 remainder 2
+    code = "21"
+
+Advantages:
+    - Short and deterministic.
+    - No random-collision retry loop.
+    - Fast to generate.
+
+Tradeoffs:
+    - Sequential IDs expose approximate system usage.
+    - A distributed system needs a unique-ID generator.
+
+Production alternatives include random Base62 codes, UUID-derived codes,
+database sequences, Redis INCR, Snowflake IDs, or allocating ID ranges to each
+application instance. Hashing the original URL alone is insufficient because
+truncating a hash creates collisions; those collisions still need detection.
+
+
+4. DATA MODEL
+-------------
+Logical table:
+
+    short_code      VARCHAR PRIMARY KEY
+    original_url    TEXT NOT NULL
+    created_at      TIMESTAMP NOT NULL
+    expires_at      TIMESTAMP NULL
+    user_id         UUID NULL
+    is_active       BOOLEAN NOT NULL
+
+Indexes:
+    - Primary index on short_code for redirects.
+    - Optional index or unique constraint on original_url for deduplication.
+    - Index on expires_at for cleanup jobs.
+
+Click events should not update the main URL row synchronously at high scale.
+Publish click events to a queue and aggregate them asynchronously. This keeps
+redirect latency low and avoids a hot database row.
+
+
+5. REQUEST FLOWS
+----------------
+Create flow:
+    Client -> API Gateway -> URL service -> generate code -> database
+
+Redirect flow:
+    Client -> API Gateway/CDN -> cache -> URL service -> database
+                                       -> HTTP redirect
+
+The redirect path must be optimized first because it receives most traffic.
+
+
+6. COLLISIONS AND CONCURRENCY
+-----------------------------
+Two requests may try to claim the same custom alias. The in-memory example uses
+an asyncio.Lock so check-and-insert is atomic inside one process.
+
+In production, process locks are not enough because multiple workers and hosts
+do not share them. Use a database primary-key/unique constraint and an atomic
+insert. If a random generated code conflicts, generate another code and retry.
+The database constraint, not an application-level pre-check, is the final guard.
+
+
+7. CACHING
+----------
+Cache short_code -> original_url in Redis because mappings are small and read
+frequently. A common cache-aside flow is:
+
+    1. Read Redis.
+    2. On miss, read the database.
+    3. Put the mapping in Redis with a TTL.
+    4. Return the redirect.
+
+Negative-cache missing codes briefly to protect the database from repeated
+lookups. If links can be edited or deleted, invalidate the cache on writes.
+Popular links may also be cached at the CDN or edge.
+
+
+8. SCALING AND PARTITIONING
+---------------------------
+URL-service instances are stateless and can sit behind a load balancer. Store
+mappings in a shared database and cache.
+
+At very large scale, shard by a hash of short_code. Hash partitioning spreads
+traffic more evenly than range partitioning. Replicas can serve reads, but a
+newly created link may briefly be missing from an asynchronously updated
+replica. Read-your-write traffic can use the primary or cache.
+
+Capacity estimate example:
+    100 million new URLs/month
+    200 bytes per record
+    storage/month = about 20 GB before indexes and replication
+
+If reads are 100 times writes, 100 million writes/month gives roughly 39 writes
+per second on average and 3,900 reads per second. Always estimate peak traffic,
+not only averages.
+
+
+9. RELIABILITY AND SECURITY
+---------------------------
+Validate URL schemes and reject unsupported protocols. Production systems also
+need phishing/malware scanning, domain blocklists, rate limiting, authentication
+for management APIs, maximum URL lengths, and abuse reporting.
+
+Do not fetch a submitted URL merely to validate it; that can create SSRF. If a
+preview service must fetch URLs, isolate it and block private/link-local network
+ranges. Avoid open redirect endpoints that accept a raw destination directly;
+redirect only through a stored short code.
+
+Use timeouts and circuit breakers for dependencies. Monitor redirect latency,
+cache-hit ratio, error rate, creation rate, collision retries, and queue lag.
+
+
+10. LOCAL IMPLEMENTATION
+------------------------
+Run the service:
+    python -m uvicorn url_shortener:app --port 8008
+
+Direct Swagger:
+    http://127.0.0.1:8008/docs
+
+The sample stores data in memory, so restarting the process removes all links.
+Its asyncio.Lock protects only one process. These choices keep the algorithm
+visible for learning; replace the dictionaries with a database and Redis for a
+production deployment.

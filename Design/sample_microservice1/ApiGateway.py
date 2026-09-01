@@ -1,13 +1,15 @@
 import httpx
 from fastapi import Body, FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from ratelimitor import RateLimitor
 
 class User(BaseModel):
     name: str
     email: str
 
 app = FastAPI()
+app.add_middleware(RateLimitor)
 
 @app.get('/api/users/all')
 async def list_users():
@@ -47,3 +49,20 @@ async def hobbies_graphql(request_body: dict = Body()):
         content=response.json(),
         status_code=response.status_code
     )
+
+@app.post("/api/urls")
+async def shorten_url(request_body: dict = Body()):
+    async with httpx.AsyncClient() as client:
+        response = await client.post("http://localhost:8008/urls", json=request_body)
+    content = response.json()
+    if response.is_success:
+        content["short_url"] = f"http://localhost:8006/s/{content['short_code']}"
+    return JSONResponse(content=content, status_code=response.status_code)
+
+@app.get("/s/{short_code}")
+async def redirect_short_url(short_code: str):
+    async with httpx.AsyncClient(follow_redirects=False) as client:
+        response = await client.get(f"http://localhost:8008/{short_code}")
+    if response.status_code == 404:
+        raise HTTPException(status_code=404, detail="Short URL not found")
+    return RedirectResponse(response.headers["location"], status_code=307)

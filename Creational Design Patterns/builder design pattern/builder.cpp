@@ -30,7 +30,7 @@
 
 // Nested class usage syntax in C++ and Python:
 // - C++:
-//     Outer::Inner inner;
+//     Outer::Inner inner = Outer::Inner();
 // - Python:
 //     outer = Outer()
 //     inner = Outer.Inner()  # or use outer reference explicitly if required by design

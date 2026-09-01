@@ -53,6 +53,21 @@ whereas quadratic probing suffers from secondary clustering.
 
 chaining is a better technique to handle collisions in handle.
 
+
+Double hashing is a special type of multiple hashing.
+
+Multiple hashing means using multiple hash functions to prevent clustering, in double hashing H1 
+identifies the base address wheras the h2() indentifies the step size.
+
+for open addressing it is h1(k, i) = (h1(k) + i * h2(k)) mod m, where i = 0, 1, 2, ..., m-1;
+
+cuckoo hashing
+
+Cuckoo Hashing is a hashing technique that uses two hash functions and allows each key to live in one of two possible locations.
+
+if the index is already occupied by another key, then the existing key is "kicked out" and reinserted into its alternative location,
+ potentially displacing another key in the process. This continues until all keys are placed without collisions or a maximum number of displacements is reached.
+
 */
 
 /*

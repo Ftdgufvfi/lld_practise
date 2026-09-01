@@ -1,0 +1,87 @@
+what is internet? A group of connected systems is called internet.
+
+Routers/switches --> is used interchangably the only difference is switch is used in the
+Access Networks(link layer) where as swith is used in Network core(Network / Ip layer).
+Both use forwarding tables and routing protocols to switch the packets.
+
+in Circuit Switching, All links, buffers between the end devices are reserved for the duration
+of communication session. (no variation of delays experienced). (traditional telephone networks)
+FDM, TDM is used for allowing the multiple users
+
+in packet switching, It is not reserved, It prioritizes performance. Instead of being idle when
+network is not used it will serve to carry the info about the other users/applications
+
+ApplicationLayer   ->  Transport layer -> network layer -> link layer       -> physical layer
+(http/ftp/smtp/DNS)        (Tcp/udp)        (IP)          (wifi, bluetooth)      (cable, optical fibre)
+
+Content Provider Network: Some cpn's like microsoft , google has massive datacenters spread across the 
+world and are connected acroos with thier private network, so, they connect to regional isp's to reach
+So, they have more control and escape from massive billing from high tier isp's.
+
+A CDN is a worldwide network of cache servers that stores content closer to users, 
+reducing latency and speeding up websites and video streaming.
+
+Web caching is becoming famous, The Cache server will be installed at the several locations
+to increase the speed, if the response present is inside the cache deliver it otherwise reroute it to main server.
+modern web caches are efficient in load balancing, parsing the data, etc. 
+
+Different security issues: Bandwidth flooding, Connection flooding, distributed DoS (DDoS),
+packet sniffer, IP spoofing
+
+At every switch, The Packet goes in store and forward, So, delay comes from that also.
+nodal processing delay: Checking Ip adresses, checking for check/ bitlevel errors
+
+Propagation delay, nodal processing delay, queuing delay, Transmission delay
+litle law =  Queue_delay = B(average Buffer size)/(Average Incoming Rate); 
+Traffic Intensity = Average Incoming Bit Rate/ transmission rate
+
+Tcp(Tansmission Control Protocol): Reliability, ordered delivery, flow control, congestion control, default port no: 80
+Udp: connection less, very light and fast, no Reliability (port 53)
+
+udp --> can be used in loss tolerant applications and throughput intensive applications.
+examples like live video calls, zoom calls.
+
+DNS helps distribute traffic by returning different IP addresses for replicated servers, allowing users to be routed to different servers and balancing the load across them.
+
+Here's the simple DNS hierarchy flow:
+Local DNS -> Root DNS → TLD DNS (.com, .org, .edu) → Authoritative DNS → Final IP address of the website.
+Example for www.amazon.com:
+Root DNS: "Ask a .com DNS server."
+.com TLD DNS: "Ask Amazon's authoritative DNS server."
+Amazon authoritative DNS: "www.amazon.com = 54.x.x.x"
+
+Application layer:
+WWW uses clent server architecture uses mostly http(Hyper text transfer protocol).
+Http is said to be stateless protocol.
+for email ->smtp.
+Some uses peer to peernetworks for file tranfer -> torrents (suffers from decentralization)
+
+Netflix uses Dash protocol for the movie straming which is built on the top of the http
+
+http 1 -> it is used to use multiple tcp connections for each objects with the server
+but it wil cause head of line breaking issue
+http 2 -> it uses single tcp connection and uses streams so, http 2 
+HTTP/3 uses QUIC over UDP instead of TCP, providing reliable, encrypted communication with independent streams.
+Because streams are independent, packet loss in one stream does not block other streams, making web pages load faster and reducing latency on unreliable networks.
+
+GET     = Read data + return body/content
+POST    = Create
+PUT     = Replace
+PATCH   = Modify
+DELETE  = Remove
+HEAD    = Get headers only (no body); Accept-language,  User-agent
+
+Client–Server: Only the server uploads, so distribution becomes slower as the number of peers increases.
+ P2P: Every peer downloads and uploads file chunks, adding more capacity to the system.
+ Therefore, P2P scales better because peers act as both consumers and distributors, as in BitTorrent.
+
+HTTPs uses TLS encryption scheme, it internally uses RSA encryption.
+public key, private key.
+
+Browser → Server: "Who are you?" 
+2. Server → Browser: Certificate + Public Key 
+3. Browser ↔ Server: Key exchange (ECDHE today) 
+4. Both derive the same Session Key 
+5. HTTPS data encrypted using AES/ChaCha20 with that Session Key
+
+

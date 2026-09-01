@@ -55,3 +55,7 @@ if __name__ == "__main__":
 
 	shapes.append(Triangle(8, 4))
 	print("Total area after adding triangle:", calculator.total_area(shapes))
+	
+# here Abc means Abstract base class, which is a class that cannot be instantiated and is meant to be subclassed. It can contain abstract methods, which are methods that must be implemented by any subclass. In this case, the Shape class is an abstract base class with an abstract method area(), which means that any subclass of Shape must implement the area() method.
+# it is conceptually equivalent to abstract class in C++ and Java.
+# abstract class object cannot be instantiated.

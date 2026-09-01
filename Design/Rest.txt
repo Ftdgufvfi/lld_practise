@@ -110,3 +110,34 @@ The one way of introducing idempotency is the clients post request produce one h
 header, the server caches the key into redis/postgres when the client retries then uses the same hash key.
 it checks if it is still in progress then it will return status code (409) means conflict.
 only post and patch needs explict idempotency handling.
+
+// graphql and grpc
+graph query language.
+it has 2 types query and mutation
+Query is for get requests and mutation is for other modification requests, It solves the problem
+of the over fetching. Client can ask for whatever he want and the resolver can return them.
+
+// Rest is very simple very easy to understand, browsers caches the get requests nicely.
+// They cannot cache post requests, graphql indeed everything is post request so, no cache performance
+// Graph ql also has the problem of N+1 Query Problem, Lets say if the query order has user
+// first resolver fetches all the orders and then each resolver n times individually query for the user.
+// Instead Data Loader can batch all of them and query it once
+
+// {
+  "query": "{ user1: hobbiesByUser(userId: 1) { id name } user2: hobbiesByUser(userId: 2) { id name } }"
+}
+//
+
+//circular Imports Problem
+
+in fastapi it is possible that we will end up in lot of circular imports problems.
+The way to get out is either defining everything in the same file, a good design never
+have the problems of the circular dependency or circulary imports.
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from orders import Order .// sometimes the typechecking works so, TYPE_CHECKING is True
+when a static type checker analyzes the file, it will be false while the python runs the application.
+// Type checking can only be used during the type annotations, Type annotations means the output
+// and input we define the types right for the request- response validation.

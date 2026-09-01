@@ -2,7 +2,7 @@ from fastapi import FastAPI, Header
 from pydantic import BaseModel
 import asyncio
 
-idempotency_lock = asyncio.Lock()
+idempotency_lock = asyncio.Lock()   # can use redis or any other distributed lock for production-grade applications
 
 hash = {}
 
@@ -33,6 +33,7 @@ async def list_users():
 async def create_user(user: UserCreate,
     idempotency_key: str = Header(alias="Idempotency-Key", default=None)):
 
+    # async with means that is asynchronous context manager.
     async with idempotency_lock:
         if(idempotency_key and idempotency_key in hash):
             if hash[idempotency_key] is not None:
